@@ -1,0 +1,16 @@
+# The detector (gad/)
+numpy
+scipy
+pandas
+pyarrow            # Parquet files
+statsmodels>=0.15
+threadpoolctl      # one BLAS thread, for reproducible numbers
+scikit-learn       # AUC-PR in evaluation/metrics.py
+
+# Building the datasets from the SWaT xlsx export
+openpyxl
+
+# The three comparison baselines, pinned to the versions used in the paper
+process-improve==1.98.0   # AdaptivePCA
+torch==2.15.0             # MemStream
+padasip==1.2.2            # RLS
