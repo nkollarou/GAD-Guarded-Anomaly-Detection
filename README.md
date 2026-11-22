@@ -5,10 +5,6 @@ from the plant's data, but every update is checked against a fixed reference
 taken at commissioning. Poisoning can therefore move it only a limited amount,
 even if nobody notices the poisoning.
 
-This repository holds the code of the paper *GAD: Bounded Adaptation for
-Anomaly Detection in Industrial Control Systems* (IFIP SEC 2027, submitted):
-the detector, the scripts that build the poisoning datasets from SWaT, and the
-scripts that produce the results.
 
 ## What is where
 
