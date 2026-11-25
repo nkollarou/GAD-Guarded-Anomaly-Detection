@@ -50,8 +50,8 @@ def split_rows(n: int) -> tuple[int, int, int]:
 
 def commission(detector: str, normal: Path):
     """Commission one detector on the clean recording. Returns what streaming
-        needs: the detector, GAD's L0 checker, the channel lists and the row at
-        which the test stream starts.
+    needs: the detector, GAD's L0 checker, the channel lists and the row at
+    which the test stream starts.
     """
     import gad.commission as gc
     from gad.swat import find_commissioning_start, split_channels
@@ -64,7 +64,7 @@ def commission(detector: str, normal: Path):
     if detector in ("gad", "gad_unguarded"):
         c = gc.commission(with_evidence=True, split=SPLIT,
                           cfg_overrides=GAD if detector == "gad" else UNGUARDED)
-        base, checker0 = c.detector, gc.l0_checker(c.steady, sensed, **c.l0_kwargs)
+        base, checker0 = c.detector, gc.l0_checker(c.steady, sensed)
         assert c.outer_train_end == fit_end and c.outer_train_end + c.calib_end == cal_end
     elif detector == "memstream":
         import torch
@@ -76,8 +76,7 @@ def commission(detector: str, normal: Path):
         base.fit(X[:fit_end])
         base.stream(X[fit_end:warm_end])
         base.calibrate(X[warm_end:cal_end], budget_time_fraction=gc.BUDGET_TIME_FRACTION,
-                       samples_per_day=SAMPLES_PER_DAY, dwell=MS_DWELL, recover=MS_RECOVER,
-                       beta_rule="clean_max")
+                       samples_per_day=SAMPLES_PER_DAY, dwell=MS_DWELL, recover=MS_RECOVER)
     elif detector == "rls":
         from baselines.padasip_rls import PadasipRLSMonitor
         filled, _ = gc.fill_gaps(steady, list(sensed) + list(commanded))
@@ -92,7 +91,7 @@ def commission(detector: str, normal: Path):
         from baselines.adaptive_pca import AdaptivePCAMonitor
         filled, _ = gc.fill_gaps(steady, list(sensed) + list(commanded))
         X = filled[sensed].to_numpy(dtype=float)
-        base = AdaptivePCAMonitor(sensed, speed="matched", update_when_out_of_control=False)
+        base = AdaptivePCAMonitor(sensed)
         base.fit(X[:fit_end])
         base.stream(X[fit_end:warm_end])
         base.calibrate(X[warm_end:cal_end], gc.BUDGET_EPISODES_PER_DAY, gc.BUDGET_TIME_FRACTION)
@@ -102,7 +101,9 @@ def commission(detector: str, normal: Path):
 
 
 def stream(detector: str, base, checker0, X: np.ndarray, U: np.ndarray, cal_end: int) -> np.ndarray:
-    """The alarm state ("NORMAL", "ANOMALY" or "DEGRADED") at every sample of one dataset."""
+    """The alarm state ("NORMAL", "ANOMALY" or "DEGRADED") at every sample of one
+    dataset.
+    """
     from gad.types import DetectorState
     if detector in ("gad", "gad_unguarded"):
         det, checker = copy.deepcopy(base), copy.deepcopy(checker0)
@@ -134,7 +135,7 @@ def ground_truth(target: str, ts: pd.Series, data_dir: Path) -> GroundTruth:
             if a["target"] == target]
     atk = tuple(Attack(a["number"], pd.Timestamp(a["start"]), pd.Timestamp(a["end"]), (target,), (target,), (),
                        f"step {a['direction'] * a['size']:+g}") for a in rows)
-    return GroundTruth(atk, (), (), ("synthetic, docs/decisions/0052",)), rows
+    return GroundTruth(atk, (), (), ("synthetic",)), rows
 
 
 def score(states: np.ndarray, data: pd.DataFrame, target: str, poison_end: int | None = None,

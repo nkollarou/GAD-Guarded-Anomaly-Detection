@@ -1,5 +1,5 @@
-"""L4: thresholds that are re-estimated at each update, within a fixed limit
-of their values at commissioning.
+"""L4: thresholds that are re-estimated at each update, within a fixed limit of
+their values at commissioning.
 """
 from __future__ import annotations
 
@@ -75,8 +75,8 @@ class AdaptiveThreshold:
             self._close_run(j)
 
     def observe(self, t: float, evidence: np.ndarray, trusted: np.ndarray) -> bool:
-        """Feed one sample's evidence; `trusted` is per channel. Returns True
-                if thresholds were refreshed on this sample.
+        """Feed one sample's evidence; `trusted` is per channel. Returns True if
+        thresholds were refreshed on this sample.
         """
         for j in range(len(self.h)):
             if np.isfinite(self.u[j]):
@@ -129,7 +129,3 @@ class AdaptiveThreshold:
         self.n_refreshes += 1
         return self.h
 
-    def at_cap(self) -> np.ndarray:
-        """Channels whose threshold sits at either bound."""
-        with np.errstate(invalid="ignore"):
-            return np.isclose(self.h, self.h_ref * self.cap) | np.isclose(self.h, self.h_ref / self.cap)

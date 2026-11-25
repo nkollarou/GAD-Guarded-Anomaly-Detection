@@ -1,10 +1,10 @@
 """Baseline: MemStream (Bhatia et al., WWW 2022) with a one-day memory.
 
 The model is ported from https://github.com/Stream-AD/MemStream (file
-code/memstream.py, commit 59b5ba0), Copyright the MemStream authors,
-licensed under the Apache License 2.0 (see LICENSE-MemStream). Modified:
-wrapped as a streaming monitor with a calibrated threshold and an alarm
-rule. The model itself is unchanged.
+code/memstream.py, commit 59b5ba0), Copyright the MemStream authors, licensed
+under the Apache License 2.0 (see LICENSE-MemStream). Modified: wrapped as a
+streaming monitor with a calibrated threshold and an alarm rule. The model
+itself is unchanged.
 """
 from __future__ import annotations
 
@@ -22,8 +22,8 @@ NOISE = 1e-3
 
 
 def _torch():
-    """torch, imported on use. Never stored on an instance: the benchmark
-        deep-copies the commissioned monitor per cell (see rrcf_forest._rrcf).
+    """torch, imported only when MemStream is used. It is not stored on the
+    monitor, so a commissioned monitor can be copied for each dataset.
     """
     import torch
     return torch
@@ -82,7 +82,6 @@ class MemStreamMonitor:
         self._count = 0
         self._reset_moments()
 
-
     def _reset_moments(self):
         torch = _torch()
         m = self.mem_data.to(torch.float64)
@@ -110,8 +109,8 @@ class MemStreamMonitor:
     # --- streaming ----------------------------------------------------------
 
     def score(self, x: np.ndarray) -> float:
-        """Score one sample, then admit it to the memory if the score is at
-                most beta. One call per second, in order.
+        """Score one sample, then admit it to the memory if the score is at most
+        beta. One call per second, in order.
         """
         if self.memory is None:
             raise RuntimeError("score() before fit()")
@@ -146,9 +145,11 @@ class MemStreamMonitor:
 
     def calibrate(self, X: np.ndarray, *, budget_time_fraction: float,
                   samples_per_day: float = 86_400.0, dwell: int = DWELL,
-                  recover: int = RECOVER, beta_rule: str = "threshold") -> float:
+                  recover: int = RECOVER) -> float:
         """Smallest threshold at which the clean window is in alarm for at most
-                `budget_time_fraction` of the time, then beta by `beta_rule`:
+        `budget_time_fraction` of the time. MemStream's memory-update threshold
+        beta is set to the largest clean score, so the memory keeps learning
+        from anything that looks like clean data.
         """
         self.beta = float("inf")
         scores = self.stream(X)
@@ -165,19 +166,15 @@ class MemStreamMonitor:
                                 "n_clean_samples": int(len(scores)),
                                 "score_max": float(np.max(scores))}
             raise MemStreamCalibrationError(str(exc)) from exc
-        if beta_rule not in ("threshold", "clean_max"):
-            raise ValueError(f"unknown beta_rule {beta_rule!r}")
         h = cal["threshold"]
         self.threshold = h
-        self.beta = h if beta_rule == "threshold" else float(np.max(scores))
+        self.beta = float(np.max(scores))
         self.budget_met = True
-        cal.update({"rule": cal["rule"] + f"; beta = {beta_rule} (docs/decisions/0155)",
-                    "beta_rule": beta_rule,
-                    "beta": self.beta, "memory_len": self.memory_len,
+        cal.update({"beta": self.beta, "memory_len": self.memory_len,
                     "epochs": self.epochs, "lr": self.lr})
         self.calibration = cal
         return h
 
 
 class MemStreamCalibrationError(RuntimeError):
-    """No threshold meets the budget on the clean window (as RRCFCalibrationError)."""
+    """No threshold meets the budget on the clean window."""

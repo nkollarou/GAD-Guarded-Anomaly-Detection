@@ -1,16 +1,14 @@
 """L1a: fits the elastic-net models from summary statistics of the data."""
 from __future__ import annotations
 
-from dataclasses import dataclass
 
 import numpy as np
 
 
 class SufficientStats:
     """Accumulates uncentered sums for a linear regression with `n_features`
-        inputs and `n_targets` outputs. Centering/standardization is derived
-        analytically from these sums when fitting — never by revisiting raw
-        data.
+    inputs and `n_targets` outputs. Centering/standardization is derived
+    analytically from these sums when fitting — never by revisiting raw data.
     """
 
     def __init__(self, n_features: int, n_targets: int) -> None:
@@ -23,19 +21,9 @@ class SufficientStats:
         self.sum_xx = np.zeros((n_features, n_features), dtype=np.float64)
         self.sum_xy = np.zeros((n_features, n_targets), dtype=np.float64)
 
-    def add(self, x: np.ndarray, y: np.ndarray) -> None:
-        if x.shape != (self.n_features,) or y.shape != (self.n_targets,):
-            raise ValueError("x/y shape does not match this SufficientStats")
-        self.n += 1
-        self.sum_x += x
-        self.sum_y += y
-        self.sum_yy += y * y
-        self.sum_xx += np.outer(x, x)
-        self.sum_xy += np.outer(x, y)
-
     def add_batch(self, X: np.ndarray, Y: np.ndarray) -> None:
-        """Fold in a batch (rows = samples) in one vectorized step. `X`/`Y`
-                are transient — nothing here retains them after this call returns.
+        """Fold in a batch (rows = samples) in one vectorized step. `X`/`Y` are
+        transient — nothing here retains them after this call returns.
         """
         if X.ndim != 2 or Y.ndim != 2 or X.shape[0] != Y.shape[0]:
             raise ValueError("X and Y must be 2-D with matching row counts")
@@ -47,18 +35,6 @@ class SufficientStats:
         self.sum_yy += (Y * Y).sum(axis=0)
         self.sum_xx += X.T @ X
         self.sum_xy += X.T @ Y
-
-    def merge(self, other: "SufficientStats") -> "SufficientStats":
-        if (self.n_features, self.n_targets) != (other.n_features, other.n_targets):
-            raise ValueError("cannot merge SufficientStats of different shape")
-        out = SufficientStats(self.n_features, self.n_targets)
-        out.n = self.n + other.n
-        out.sum_x = self.sum_x + other.sum_x
-        out.sum_y = self.sum_y + other.sum_y
-        out.sum_yy = self.sum_yy + other.sum_yy
-        out.sum_xx = self.sum_xx + other.sum_xx
-        out.sum_xy = self.sum_xy + other.sum_xy
-        return out
 
     @property
     def mean_x(self) -> np.ndarray:
@@ -84,18 +60,11 @@ class SufficientStats:
         return self.sum_xx - self.n * np.outer(mx, mx)
 
     def centered_cross(self) -> np.ndarray:
-        """n * Cov(x, y): sum((x - mean_x)(y - mean_y)^T), shape (n_features, n_targets)."""
+        """n * Cov(x, y): sum((x - mean_x)(y - mean_y)^T), shape (n_features,
+        n_targets).
+        """
         mx, my = self.mean_x, self.mean_y
         return self.sum_xy - self.n * np.outer(mx, my)
-
-    def n_bytes(self) -> int:
-        """Size of the retained sufficient statistics, in bytes — the
-                *adaptation working set* size. Report this separately from a fitted
-                model's coefficient array; never add them together.
-        """
-        return sum(
-            arr.nbytes for arr in (self.sum_x, self.sum_y, self.sum_yy, self.sum_xx, self.sum_xy)
-        )
 
 
 def _soft_threshold(z: np.ndarray, gamma: float) -> np.ndarray:
@@ -111,15 +80,14 @@ def fit_elastic_net_multi_from_gram(
     tol: float = 1e-7,
     weights: np.ndarray | None = None,
 ) -> np.ndarray:
-    """Coordinate descent for elastic net, operating only on a (mean) Gram
-        matrix `gram` = (1/n) XᵀX and cross matrix `cross` = (1/n) XᵀY —
-        never the raw design matrix. `cross` is (p, n_targets); every target
-        shares `gram`, so each coordinate step updates all targets at once
-        (one (n_targets,)-vector operation per feature, not `n_targets`
-        separate scalar ones) — ~n_targets times fewer Python-level iterations
-        than solving each target independently, for an identical result
-        (coordinates are independent across targets given a shared Gram).
-        Objective, per target column y:
+    """Coordinate descent for elastic net, operating only on a (mean) Gram matrix
+    `gram` = (1/n) XᵀX and cross matrix `cross` = (1/n) XᵀY — never the raw
+    design matrix. `cross` is (p, n_targets); every target shares `gram`, so
+    each coordinate step updates all targets at once (one (n_targets,)-vector
+    operation per feature, not `n_targets` separate scalar ones) — ~n_targets
+    times fewer Python-level iterations than solving each target independently,
+    for an identical result (coordinates are independent across targets given a
+    shared Gram). Objective, per target column y:
     """
     if lambda2 <= 0:
         raise ValueError("lambda2 must be > 0 (guards zero-variance features from a zero denominator)")
@@ -157,8 +125,8 @@ def fit_elastic_net_from_gram(
     tol: float = 1e-7,
     weights: np.ndarray | None = None,
 ) -> np.ndarray:
-    """Single-target convenience wrapper around
-        `fit_elastic_net_multi_from_gram` (`cross` is (p,), returns (p,)).
+    """Single-target convenience wrapper around `fit_elastic_net_multi_from_gram`
+    (`cross` is (p,), returns (p,)).
     """
     beta = fit_elastic_net_multi_from_gram(gram, cross[:, None], lambda1, lambda2, max_iter, tol, weights)
     return beta[:, 0]
@@ -166,9 +134,9 @@ def fit_elastic_net_from_gram(
 
 def default_lambda1(n_features: int, n: int) -> float:
     """The 'universal' sparsity penalty sqrt(2 log(p) / n) (Bickel-Ritov-
-        Tsybakov), for elastic net fit on features AND target standardized to
-        unit variance — so this value is unitless and shared across every
-        per-channel model regardless of the channel's physical units.
+    Tsybakov), for elastic net fit on features AND target standardized to unit
+    variance — so this value is unitless and shared across every per-channel
+    model regardless of the channel's physical units.
     """
     return float(np.sqrt(2.0 * np.log(n_features) / n))
 
@@ -176,13 +144,13 @@ def default_lambda1(n_features: int, n: int) -> float:
 def standardize_gram_cross(
     stats: SufficientStats,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    """Derive (feature_mean, feature_std, target_mean, target_std,
-        gram_std, cross_std) analytically from `stats` — never revisits raw
-        data. A zero-variance feature/target gets a std of 1.0 used only as a
-        safe division placeholder: its row/column in the centered Gram/cross
-        is already exactly zero, so the standardized entry is 0/1 = 0, not
-        0/0. `feature_std`/`target_std` are returned as *actually observed*
-        (possibly 0) — callers needing the placeholder should guard again.
+    """Derive (feature_mean, feature_std, target_mean, target_std, gram_std,
+    cross_std) analytically from `stats` — never revisits raw data. A zero-
+    variance feature/target gets a std of 1.0 used only as a safe division
+    placeholder: its row/column in the centered Gram/cross is already exactly
+    zero, so the standardized entry is 0/1 = 0, not 0/0.
+    `feature_std`/`target_std` are returned as *actually observed* (possibly 0)
+    — callers needing the placeholder should guard again.
     """
     feature_mean = stats.mean_x
     target_mean = stats.mean_y
@@ -208,9 +176,9 @@ def destandardize_coefficients(
     target_mean: np.ndarray,
     target_std: np.ndarray,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Map coefficients fit in standardized space back to raw units, so
-        `beta_raw` directly bounds a raw-unit perturbation's effect on the
-        raw-unit prediction (‖β‖·‖δ‖). `beta_std` is (p,) or (p, n_targets).
+    """Map coefficients fit in standardized space back to raw units, so `beta_raw`
+    directly bounds a raw-unit perturbation's effect on the raw-unit prediction
+    (‖β‖·‖δ‖). `beta_std` is (p,) or (p, n_targets).
     """
     feature_std_safe = np.where(feature_std > 0, feature_std, 1.0)
     if beta_std.ndim == 1:

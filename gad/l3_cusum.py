@@ -16,7 +16,8 @@ EVT_MIN_PEAKS = 30
 
 
 def min_cap_factor_for_dwell(lam: float, dwell: int) -> float:
-    """The smallest accumulator ceiling that can sustain a `dwell`-sample alarm."""
+    """The smallest accumulator ceiling that can sustain a `dwell`-sample alarm.
+    """
     if not 0.0 < lam < 1.0:
         raise ValueError(f"lam must be in (0, 1); got {lam}")
     if dwell < 1:
@@ -24,28 +25,12 @@ def min_cap_factor_for_dwell(lam: float, dwell: int) -> float:
     return float(lam ** -dwell)
 
 
-def drain_bound_steps(cap_factor: float, k: np.ndarray, h: np.ndarray,
-                      lam: float) -> np.ndarray:
-    """Worst-case steps for a capped accumulator to fall back under `h`, per
-        channel, **on the assumption that the deviation has ended** (residual
-        back to zero).
-    """
-    if not 0.0 < lam < 1.0:
-        raise ValueError(f"lam must be in (0, 1) to drain; got {lam}")
-    k = np.asarray(k, dtype=np.float64)
-    h = np.asarray(h, dtype=np.float64)
-    K = k / (1.0 - lam)
-    with np.errstate(invalid="ignore", divide="ignore"):
-        n = np.log((h + K) / (cap_factor * h + K)) / np.log(lam)
-    return np.where(np.isfinite(h) & np.isfinite(k), n, np.inf)
-
-
 class Cusum:
-    """Two-sided CUSUM for one branch's channels. A NaN input (the branch
-        or L2 abstains on that channel this step) freezes that channel's
-        accumulators — no update, no reset — and reports NaN evidence; an
-        abstention is not evidence of normality, so it must not silently
-        decay the accumulated evidence either.
+    """Two-sided CUSUM for one branch's channels. A NaN input (the branch or L2
+    abstains on that channel this step) freezes that channel's accumulators —
+    no update, no reset — and reports NaN evidence; an abstention is not
+    evidence of normality, so it must not silently decay the accumulated
+    evidence either.
     """
 
     def __init__(self, k: np.ndarray, h: np.ndarray | None = None, lam: float = 1.0,
@@ -79,7 +64,7 @@ class Cusum:
                         f"{dwell}-sample dwell at lam={lam}: the accumulator is "
                         f"pinned at the ceiling with no reserve, so the evidence "
                         f"falls under h on the next sample that is not above the "
-                        f"slack. Minimum is {floor:.4f} (docs/decisions/0079)")
+                        f"slack. Minimum is {floor:.4f}")
         if self.h_by_context is not None:
             for c, v in self.h_by_context.items():
                 if v.shape != self.k.shape:
@@ -123,11 +108,11 @@ class Cusum:
         np.minimum(self.s_neg, ceiling, out=self.s_neg, where=ok)
 
     def rescale(self, factor: np.ndarray) -> None:
-        """Multiply each channel's accumulators by `factor` (non-finite
-                entries leave that channel unchanged). When a new bundle changes a
-                channel's residual scale from sigma_old to sigma_new, a factor of
-                sigma_old / sigma_new keeps the evidence already gathered in the
-                same physical units (BUILD.md Part 6, step 7).
+        """Multiply each channel's accumulators by `factor` (non-finite entries
+        leave that channel unchanged). When a new bundle changes a channel's
+        residual scale from sigma_old to sigma_new, a factor of sigma_old /
+        sigma_new keeps the evidence already gathered in the same physical
+        units (BUILD.md Part 6, step 7).
         """
         factor = np.asarray(factor, dtype=np.float64)
         if factor.shape != self.k.shape:
@@ -140,8 +125,8 @@ class Cusum:
 
     def effective_h(self, regime=None) -> np.ndarray:
         """The threshold in force per channel. Without per-context bars, or
-                without a regime, this is the channel-wide `h` -- so every existing
-                caller is unchanged.
+        without a regime, this is the channel-wide `h` -- so every existing
+        caller is unchanged.
         """
         if self.h is None:
             raise RuntimeError("h was not set at construction")
@@ -163,10 +148,9 @@ class Cusum:
 
 
 def calibrate_k(scaled_residuals: np.ndarray, factor: float = 0.5, min_scale: float = 1e-6) -> np.ndarray:
-    """k = `factor` x the robust scale of each channel's clean scaled
-        residual (columns of `scaled_residuals`, shape (T, n_channels), NaNs
-        allowed). NaN where a channel has no
-        usable clean data at all.
+    """k = `factor` x the robust scale of each channel's clean scaled residual
+    (columns of `scaled_residuals`, shape (T, n_channels), NaNs allowed). NaN
+    where a channel has no usable clean data at all.
     """
     n = scaled_residuals.shape[1]
     k = np.full(n, np.nan)
@@ -203,26 +187,24 @@ def calibrate_h_by_context(
     budget_time_fraction: float,
     samples_per_day: float,
     min_rows: int = 1000,
-    h_max: float | None = None,
     z: np.ndarray | None = None,
     min_typical_z: float = 0.0,
-    detail: dict[int, dict] | None = None,
-    estimator: str = "bisection",
-    h_channel: float | None = None,
-    pooled_report: dict | None = None,
     refuse_empirical: bool = True,
 ) -> tuple[dict[int, float], list[int]]:
-    """One threshold per operating context, for a single channel."""
+    """One threshold per operating context, for a single channel. The budget is
+    shared equally by the contexts that get their own threshold. A context with
+    too few rows, or whose residuals L2 does not describe, is returned in the
+    second list and keeps the channel's threshold.
+    """
     if evidence.shape != contexts.shape:
         raise ValueError("evidence and contexts must have the same shape")
     if min_rows < 1:
         raise ValueError("min_rows must be at least 1")
-    total_days = len(evidence) / samples_per_day
-    if total_days <= 0:
+    if len(evidence) == 0:
         raise ValueError("no samples to calibrate on")
-
     if z is not None and z.shape != evidence.shape:
         raise ValueError("z must have the same shape as evidence")
+
     ids, counts = np.unique(contexts, return_counts=True)
     own, thin = [], []
     for c, n in zip(ids, counts):
@@ -240,140 +222,22 @@ def calibrate_h_by_context(
     if not own:
         return {}, thin
 
-    if estimator not in ("bisection", "evt", "pooled", "cascade"):
-        raise ValueError(
-            "estimator must be 'bisection', 'evt', 'pooled' or 'cascade'")
-    if estimator in ("pooled", "cascade") and h_channel is None:
-        raise ValueError("the pooled estimator needs h_channel as its ceiling")
     eps_each = budget_episodes_per_day / len(own)
     frac_each = budget_time_fraction / len(own)
     out: dict[int, float] = {}
-
-    cascaded: dict[int, float] = {}
-    if estimator in ("pooled", "cascade"):
-        bars, rep = calibrate_h_evt_pooled(
-            evidence, contexts, own, eps_each, frac_each, samples_per_day,
-            float(h_channel))
-        if pooled_report is not None:
-            pooled_report.update(rep)
-        for c in own:
-            if c in bars:
-                out[c] = float(bars[c].h)
-                if detail is not None:
-                    m = contexts == c
-                    ev = evidence[m]
-                    fin = ev[np.isfinite(ev)]
-                    n_ep, _ = episodes_and_time_in_alarm(ev, bars[c].h)
-                    in_alarm = float(np.sum(np.nan_to_num(ev, nan=-np.inf) >= bars[c].h))
-                    detail[c] = {
-                        "h": float(bars[c].h), "n_rows": int(m.sum()),
-                        "n_contexts_sharing_budget": len(own),
-                        "estimator": "pooled", "method": bars[c].method,
-                        "n_peaks": int(bars[c].n_peaks),
-                        "gpd_shape": float(bars[c].shape),
-                        "episodes_per_day_allowed": float(eps_each),
-                        "time_fraction_allowed": float(frac_each),
-                        "episodes_per_day_realised": float(n_ep / total_days),
-                        "time_fraction_realised": float(in_alarm / len(evidence)),
-                        "evidence_max": (float(fin.max()) if fin.size else None),
-                        "h_over_evidence_max": (float(bars[c].h / fin.max())
-                                                if fin.size and fin.max() > 0 else None),
-                    }
-            elif estimator == "pooled":
-                thin.append(c)
-        if estimator == "pooled":
-            return out, sorted(thin)
-        cascaded = dict(out)
-        own = [c for c in own if c not in cascaded]
-        if not own:
-            return out, sorted(thin)
-        eps_each = budget_episodes_per_day / len(own)
-        frac_each = budget_time_fraction / len(own)
-
     for c in own:
         m = contexts == c
-        ev = evidence[m]
-        finite = ev[np.isfinite(ev)]
-        hi = h_max if h_max is not None else (float(finite.max()) * 2.0 + 1.0
-                                              if finite.size else 1.0)
-
-        def satisfies(h: float) -> bool:
-            n_ep, _ = episodes_and_time_in_alarm(ev, h)
-            in_alarm = float(np.sum(np.nan_to_num(ev, nan=-np.inf) >= h))
-            return (n_ep / total_days <= eps_each
-                    and in_alarm / len(evidence) <= frac_each)
-
-        if estimator in ("evt", "cascade"):
-            n_ctx = int(m.sum())
-            if n_ctx <= 0:
-                thin.append(c)
-                continue
-            ratio = len(evidence) / n_ctx
-            try:
-                res = calibrate_h_evt(ev, eps_each * ratio, frac_each * ratio,
-                                      samples_per_day)
-            except ValueError:
-                thin.append(c)   # unreachable: leave it to the channel-wide bar
-                continue
-            if res.method != "evt" and refuse_empirical:
-                thin.append(c)
-                continue
-            out[c] = float(res.h)
-            if detail is not None:
-                n_ep, _ = episodes_and_time_in_alarm(ev, res.h)
-                in_alarm = float(np.sum(np.nan_to_num(ev, nan=-np.inf) >= res.h))
-                detail[c] = {
-                    "h": float(res.h), "n_rows": n_ctx,
-                    "n_contexts_sharing_budget": len(own),
-                    "estimator": "evt", "method": res.method,
-                    "n_peaks": int(res.n_peaks), "gpd_shape": res.shape,
-                    "episodes_per_day_allowed": float(eps_each),
-                    "time_fraction_allowed": float(frac_each),
-                    "episodes_per_day_realised": float(n_ep / total_days),
-                    "time_fraction_realised": float(in_alarm / len(evidence)),
-                    "evidence_max": (float(finite.max()) if finite.size else None),
-                    "h_over_evidence_max": (float(res.h / finite.max())
-                                            if finite.size and finite.max() > 0
-                                            else None),
-                }
+        ratio = len(evidence) / int(m.sum())
+        try:
+            res = calibrate_h_evt(evidence[m], eps_each * ratio, frac_each * ratio,
+                                  samples_per_day)
+        except ValueError:
+            thin.append(c)   # unreachable: leave it to the channel-wide threshold
             continue
-        if not satisfies(hi):
+        if res.method != "evt" and refuse_empirical:
             thin.append(c)
             continue
-        lo, ceiling = 0.0, hi
-        for _ in range(60):
-            if hi - lo < 1e-4:
-                break
-            mid = (lo + hi) / 2.0
-            if satisfies(mid):
-                hi = mid
-            else:
-                lo = mid
-        out[c] = hi
-        if detail is not None:
-            n_ep, _ = episodes_and_time_in_alarm(ev, hi)
-            in_alarm = float(np.sum(np.nan_to_num(ev, nan=-np.inf) >= hi))
-            detail[c] = {
-                "h": float(hi),
-                "n_rows": int(m.sum()),
-                "n_contexts_sharing_budget": len(own),
-                "estimator": "bisection",
-                "h_over_evidence_max": (float(hi / finite.max())
-                                        if finite.size and finite.max() > 0
-                                        else None),
-                "episodes_per_day_allowed": float(eps_each),
-                "time_fraction_allowed": float(frac_each),
-                "episodes_per_day_realised": float(n_ep / total_days),
-                "time_fraction_realised": float(in_alarm / len(evidence)),
-                "evidence_max": (float(finite.max()) if finite.size else None),
-                "search_ceiling": float(ceiling),
-                "at_search_ceiling": bool(hi >= ceiling * 0.999),
-                # which of the two constraints is tight at the chosen bar
-                "binding": ("episodes"
-                            if n_ep / total_days > eps_each * 0.999
-                            else ("time" if in_alarm / len(evidence) > frac_each * 0.999
-                                  else "neither")),
-            }
+        out[c] = float(res.h)
     return out, sorted(thin)
 
 
@@ -386,10 +250,10 @@ def calibrate_h_bisection(
     tol: float = 1e-4,
     max_iter: int = 60,
 ) -> float:
-    """Smallest h (most sensitive) such that, on `evidence` (one channel's
-        clean-data CUSUM statistic stream), BOTH the episode-rate and the
-        time-in-alarm fraction stay within budget. Raises if even `h_max`
-        can't satisfy the budget (refuse silently-wrong calibration).
+    """Smallest h (most sensitive) such that, on `evidence` (one channel's clean-
+    data CUSUM statistic stream), BOTH the episode-rate and the time-in-alarm
+    fraction stay within budget. Raises if even `h_max` can't satisfy the
+    budget (refuse silently-wrong calibration).
     """
     finite = evidence[np.isfinite(evidence)]
     if h_max is None:
@@ -421,12 +285,12 @@ def calibrate_h_bisection(
 
 @dataclass(frozen=True)
 class EvtThreshold:
-    """An alarm level for one channel, and how it was obtained. `method` is
-        "evt" when a tail was fitted and "empirical" when there were too few
-        excursions to fit one and `calibrate_h_bisection` was used instead —
-        reported so a caller can say how many channels actually got a fitted
-        tail. `shape` is the fitted GPD shape of the excursion peaks (NaN when
-        empirical): above 0 a heavy tail, 0 exponential, below 0 bounded.
+    """An alarm level for one channel, and how it was obtained. `method` is "evt"
+    when a tail was fitted and "empirical" when there were too few excursions
+    to fit one and `calibrate_h_bisection` was used instead — reported so a
+    caller can say how many channels actually got a fitted tail. `shape` is the
+    fitted GPD shape of the excursion peaks (NaN when empirical): above 0 a
+    heavy tail, 0 exponential, below 0 bounded.
     """
 
     h: float
@@ -436,10 +300,10 @@ class EvtThreshold:
 
 
 def excursion_peaks(evidence: np.ndarray, u: float) -> np.ndarray:
-    """Maximum of each maximal run of samples above `u` — one value per
-        excursion. A CUSUM that crosses a level stays above it for a stretch,
-        so its samples above `u` are not independent; the runs are, closely
-        enough, and one run is one alarm episode. NaN breaks a run.
+    """Maximum of each maximal run of samples above `u` — one value per excursion.
+    A CUSUM that crosses a level stays above it for a stretch, so its samples
+    above `u` are not independent; the runs are, closely enough, and one run is
+    one alarm episode. NaN breaks a run.
     """
     above = np.nan_to_num(evidence, nan=-np.inf) > u
     edges = np.diff(np.concatenate(([0], above.astype(np.int8), [0])))
@@ -449,108 +313,14 @@ def excursion_peaks(evidence: np.ndarray, u: float) -> np.ndarray:
 
 
 def _gpd_level(excesses: np.ndarray, survival: float) -> tuple[float, float]:
-    """(level, shape): the excess over the starting quantile at which a GPD
-        fitted to `excesses` has survival probability `survival`, and the
-        fitted shape.
+    """(level, shape): the excess over the starting quantile at which a GPD fitted
+    to `excesses` has survival probability `survival`, and the fitted shape.
     """
     shape, _, scale = genpareto.fit(excesses, floc=0.0)
     return float(genpareto.isf(survival, shape, loc=0.0, scale=scale)), float(shape)
 
 
 POOLED_MIN_PEAKS_PER_CONTEXT = 3
-
-
-def calibrate_h_evt_pooled(
-    evidence: np.ndarray,
-    contexts: np.ndarray,
-    own: list[int],
-    budget_episodes_per_day: float,
-    budget_time_fraction: float,
-    samples_per_day: float,
-    h_channel: float,
-    tail_quantile: float = EVT_TAIL_QUANTILE,
-    min_peaks: int = EVT_MIN_PEAKS,
-    min_peaks_per_context: int = POOLED_MIN_PEAKS_PER_CONTEXT,
-) -> tuple[dict[int, EvtThreshold], dict]:
-    """One tail SHAPE for a channel, each context's own SCALE."""
-    evidence = np.asarray(evidence, dtype=float)
-    contexts = np.asarray(contexts, dtype=np.int64)
-    if evidence.shape != contexts.shape:
-        raise ValueError("evidence and contexts must have the same shape")
-    total_rows = len(evidence)
-    total_days = total_rows / samples_per_day if samples_per_day else float("nan")
-    if not (total_days > 0):
-        raise ValueError("no samples to calibrate on")
-
-    per: dict[int, dict] = {}
-    pooled_peaks, pooled_exceed = [], []
-    contributing: list[int] = []
-    for c in own:
-        m = contexts == c
-        ev_c = evidence[m]
-        finite = ev_c[np.isfinite(ev_c)]
-        if finite.size == 0:
-            continue
-        u = float(np.quantile(finite, tail_quantile))
-        peaks = excursion_peaks(ev_c, u) - u
-        exceed = finite[finite > u] - u
-        peaks = peaks[np.isfinite(peaks) & (peaks > 0)]
-        exceed = exceed[np.isfinite(exceed) & (exceed > 0)]
-        if peaks.size == 0 or exceed.size == 0:
-            continue
-        idx_p, idx_e = float(peaks.mean()), float(exceed.mean())
-        if not (idx_p > 0 and idx_e > 0):
-            continue
-        per[c] = {"u": u, "peaks": peaks, "exceed": exceed,
-                  "idx_p": idx_p, "idx_e": idx_e,
-                  "ev_max": float(finite.max())}
-        if peaks.size >= min_peaks_per_context:
-            pooled_peaks.append(peaks / idx_p)
-            pooled_exceed.append(exceed / idx_e)
-            contributing.append(c)
-
-    report = {"n_contexts_offered": len(own), "n_contexts_usable": len(per),
-              "contributing_contexts": sorted(contributing),
-              "min_peaks_per_context": int(min_peaks_per_context)}
-    if not pooled_peaks:
-        return {}, {**report, "n_pooled_peaks": 0, "reason": "no context met the floor"}
-    pp = np.concatenate(pooled_peaks)
-    pe = np.concatenate(pooled_exceed)
-    report["n_pooled_peaks"] = int(pp.size)
-    report["n_pooled_exceedances"] = int(pe.size)
-    if pp.size < min_peaks or pe.size < min_peaks:
-        return {}, {**report, "reason": f"pooled peaks {pp.size} < {min_peaks}"}
-
-    try:
-        shape_p, _, scale_p = genpareto.fit(pp, floc=0.0)
-        shape_e, _, scale_e = genpareto.fit(pe, floc=0.0)
-    except (ValueError, RuntimeError, FloatingPointError) as exc:
-        return {}, {**report, "reason": f"pooled fit failed: {exc}"}
-    report["shape_peaks"] = float(shape_p)
-    report["shape_exceedances"] = float(shape_e)
-
-    bars: dict[int, EvtThreshold] = {}
-    for c, d in per.items():
-        # identical arithmetic to calibrate_h_evt, with this context's counts
-        target_ep = budget_episodes_per_day * total_days / len(d["peaks"])
-        target_time = budget_time_fraction * total_rows / len(d["exceed"])
-        h_ep = h_time = d["u"]
-        try:
-            if target_ep < 1.0:
-                h_ep = d["u"] + d["idx_p"] * float(
-                    genpareto.isf(target_ep, shape_p, loc=0.0, scale=scale_p))
-            if target_time < 1.0:
-                h_time = d["u"] + d["idx_e"] * float(
-                    genpareto.isf(target_time, shape_e, loc=0.0, scale=scale_e))
-        except (ValueError, RuntimeError, FloatingPointError):
-            continue
-        h = max(h_ep, h_time)
-        if not np.isfinite(h) or h <= d["ev_max"] or h > h_channel:
-            continue
-        bars[c] = EvtThreshold(h=float(h), method="evt_pooled",
-                               n_peaks=len(d["peaks"]), shape=float(shape_p))
-    report["n_bars"] = len(bars)
-    return bars, report
 
 
 def calibrate_h_evt(
@@ -562,7 +332,7 @@ def calibrate_h_evt(
     min_peaks: int = EVT_MIN_PEAKS,
 ) -> EvtThreshold:
     """Alarm level for one channel from a peaks-over-threshold tail fit, for
-        budgets finer than the calibration window can show directly.
+    budgets finer than the calibration window can show directly.
     """
     finite = evidence[np.isfinite(evidence)]
     if len(finite) == 0:

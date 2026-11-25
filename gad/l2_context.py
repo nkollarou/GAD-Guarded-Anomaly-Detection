@@ -1,5 +1,5 @@
-"""L2: operating contexts. Each sensor is judged within the current state of
-the actuators it depends on, with a short settling context after a change.
+"""L2: operating contexts. Each sensor is judged within the current state of the
+actuators it depends on, with a short settling context after a change.
 """
 from __future__ import annotations
 
@@ -16,9 +16,9 @@ def _encode(u: np.ndarray, idx: np.ndarray) -> int:
 
 
 class ActuatorContexts:
-    """`channel_sets[j]`: indices into the commanded vector that sensed
-        channel j is conditioned on. `stage_sets[s]`: the commanded indices of
-        stage s. `channel_stage[j]`: the stage sensed channel j belongs to.
+    """`channel_sets[j]`: indices into the commanded vector that sensed channel j
+    is conditioned on. `stage_sets[s]`: the commanded indices of stage s.
+    `channel_stage[j]`: the stage sensed channel j belongs to.
     """
 
     def __init__(
@@ -36,10 +36,6 @@ class ActuatorContexts:
         self.channel_stage = np.asarray(channel_stage, dtype=np.int64)
         self._last: dict[str, tuple[bytes, np.ndarray]] = {}
 
-    @property
-    def n_stages(self) -> int:
-        return len(self.stage_sets)
-
     def _ids(self, kind: str, u: np.ndarray, sets: list[np.ndarray]) -> np.ndarray:
         key = np.asarray(u, dtype=np.float64).tobytes()
         hit = self._last.get(kind)
@@ -50,18 +46,15 @@ class ActuatorContexts:
         return ids.copy()
 
     def channel_ids(self, u: np.ndarray) -> np.ndarray:
-        """One context id per sensed channel — usable wherever a
-                `regime_fn` is expected.
+        """One context id per sensed channel — usable wherever a `regime_fn` is
+        expected.
         """
         return self._ids("channel", u, self.channel_sets)
 
-    def stage_ids(self, u: np.ndarray) -> np.ndarray:
-        return self._ids("stage", u, self.stage_sets)
-
 
 def per_channel(regime, n: int) -> np.ndarray:
-    """A `regime_fn` result as one id per channel: an int means every
-        channel shares it (the whole-plant keying), an array is used as is.
+    """A `regime_fn` result as one id per channel: an int means every channel
+    shares it (the whole-plant keying), an array is used as is.
     """
     ids = np.asarray(regime)
     if ids.ndim == 0:
@@ -76,7 +69,7 @@ SETTLING = -1
 
 class SettlingTracker:
     """Marks each channel as SETTLING for `n_settle` samples after its context
-        changes.
+    changes.
     """
 
     def __init__(self, n_channels: int, n_settle: int) -> None:

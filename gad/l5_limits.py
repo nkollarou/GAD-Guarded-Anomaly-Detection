@@ -46,7 +46,7 @@ class EventScaleResidual(BoundedScaleResidual):
 
     def scale_factors(self) -> tuple[np.ndarray, np.ndarray]:
         """Per channel, the largest and smallest committed s / s_ref over its
-                referenced contexts (1.0 where there is no reference).
+        referenced contexts (1.0 where there is no reference).
         """
         hi = np.ones(self.n_channels)
         lo = np.ones(self.n_channels)
@@ -73,9 +73,9 @@ class EventScaleResidual(BoundedScaleResidual):
 
 def joint_clamp(h: np.ndarray, h_ref: np.ndarray, f_hi: np.ndarray, f_lo: np.ndarray,
                 cap: float) -> tuple[np.ndarray, np.ndarray]:
-    """Clamp thresholds so that f_hi * (h / h_ref) <= cap and
-        f_lo * (h / h_ref) >= 1 / cap. Returns (h, budget used), where used =
-        log(f_hi * h / h_ref) / log(cap), NaN where h_ref is not finite.
+    """Clamp thresholds so that f_hi * (h / h_ref) <= cap and f_lo * (h / h_ref)
+    >= 1 / cap. Returns (h, budget used), where used = log(f_hi * h / h_ref) /
+    log(cap), NaN where h_ref is not finite.
     """
     h = np.asarray(h, dtype=np.float64).copy()
     h_ref = np.asarray(h_ref, dtype=np.float64)

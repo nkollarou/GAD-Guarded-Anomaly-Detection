@@ -1,5 +1,5 @@
-"""Baseline: AdaptivePCA from the process-improve package, learning at the
-same 12-hour half-life as GAD.
+"""Baseline: AdaptivePCA from the process-improve package, learning at the same
+12-hour half-life as GAD.
 """
 from __future__ import annotations
 
@@ -17,8 +17,8 @@ EXCLUDED = ("FIT601",)
 
 
 def n_components_for(X: np.ndarray, share: float = VARIANCE_EXPLAINED) -> int:
-    """Smallest number of components explaining `share` of the variance of
-        the standardised data.
+    """Smallest number of components explaining `share` of the variance of the
+    standardised data.
     """
     sd = X.std(axis=0)
     Z = (X - X.mean(axis=0)) / np.where(sd > 0, sd, 1.0)
@@ -27,9 +27,8 @@ def n_components_for(X: np.ndarray, share: float = VARIANCE_EXPLAINED) -> int:
 
 
 def decide(out_of_control: np.ndarray, dwell: int = 5, recover: int = 30) -> np.ndarray:
-    """The same decider as ours (gad.l4_decision.MonitorDecider, one monitor):
-        ANOMALY after `dwell` consecutive out-of-control samples, NORMAL again
-        after `recover` consecutive in-control ones. Returns a bool ANOMALY array.
+    """The same alarm rule as GAD: ANOMALY after `dwell` out-of-control samples in
+    a row, NORMAL again after `recover` in-control ones.
     """
     state = np.zeros(len(out_of_control), dtype=bool)
     anomaly, bad, good = False, 0, 0
@@ -48,25 +47,14 @@ def _episodes(a: np.ndarray) -> int:
 
 
 class AdaptivePCAMonitor:
-    """`speed="matched"` (main run) or `"default"` (the package's own
-        adaptation arguments, labelled secondary).
+    """AdaptivePCA with its forgetting rates set to GAD's 12-hour half-life. As
+    the package recommends, a sample flagged out of control does not update the
+    model.
     """
 
-    def __init__(self, sensed, speed: str = "matched", dwell: int = 5, recover: int = 30,
-                 update_when_out_of_control: bool = False) -> None:
-        """`update_when_out_of_control` is the package's own switch. Its
-                default, False, is what the library recommends: a sample flagged out
-                of control does not update the model, so a fault is not absorbed as
-                normal. True lets it
-                keep adapting and recover. Both are run and both are reported; neither
-                is "the fixed version".
-        """
-        if speed not in ("matched", "default"):
-            raise ValueError("speed must be 'matched' or 'default'")
-        self.update_when_out_of_control = bool(update_when_out_of_control)
+    def __init__(self, sensed, dwell: int = 5, recover: int = 30) -> None:
         self.sensed = [s for s in sensed if s not in EXCLUDED]
         self.cols = [i for i, s in enumerate(sensed) if s not in EXCLUDED]
-        self.speed = speed
         self.dwell, self.recover = dwell, recover
         self.model: AdaptivePCA | None = None
         self.conf_level = PROVISIONAL_CONF
@@ -77,12 +65,10 @@ class AdaptivePCAMonitor:
         """Rows of all sensed channels; the excluded ones are dropped here."""
         X_fit = X_fit[:, self.cols]
         A = n_components_for(X_fit)
-        kw = dict(n_components=A, conf_level=PROVISIONAL_CONF,
-                  update_when_out_of_control=self.update_when_out_of_control)
-        if self.speed == "matched":
-            kw.update(forgetting_factor=MATCHED_RATE, lambda_center=MATCHED_RATE,
-                      alpha_scale=MATCHED_RATE, adaptive_spe_limit=False)
-        self.model = AdaptivePCA(**kw).fit(pd.DataFrame(X_fit, columns=self.sensed))
+        self.model = AdaptivePCA(
+            n_components=A, conf_level=PROVISIONAL_CONF, update_when_out_of_control=False,
+            forgetting_factor=MATCHED_RATE, lambda_center=MATCHED_RATE,
+            alpha_scale=MATCHED_RATE, adaptive_spe_limit=False).fit(pd.DataFrame(X_fit, columns=self.sensed))
         # training SPE, as the package computes it, for re-deriving its SPE limit
         m = self.model
         Xs = np.nan_to_num((X_fit - m._mx0) / m._sx0)
@@ -99,7 +85,8 @@ class AdaptivePCAMonitor:
         m._spe_limit_0 = spe_calculation(self._train_spe, conf_level=conf)
 
     def stream(self, X: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-        """Feed rows through `update` (it adapts as it goes); return T2 and SPE."""
+        """Feed rows through `update` (it adapts as it goes); return T2 and SPE.
+        """
         X = X[:, self.cols]
         t2, spe = np.empty(len(X)), np.empty(len(X))
         for i, x in enumerate(X):
@@ -110,8 +97,8 @@ class AdaptivePCAMonitor:
     def calibrate(self, X_cal: np.ndarray, budget_eps_day: float, budget_time: float,
                   samples_per_day: float = 86_400.0) -> float:
         """Stream the calibration rows at the provisional level, then choose the
-                most sensitive confidence level whose alarms, through the decider,
-                stay within the budget on those rows (bisection on -log10(1 - conf)).
+        most sensitive confidence level whose alarms, through the decider, stay
+        within the budget on those rows (bisection on -log10(1 - conf)).
         """
         t2, spe = self.stream(X_cal)
         m = self.model

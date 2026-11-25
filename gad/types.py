@@ -37,10 +37,9 @@ class Sample:
 
 @dataclass(frozen=True)
 class Decision:
-    """The detector's only output. Quantised: no p-value, statistic or
-        residual leaves the detector — just the state and enough provenance
-        (bundle_id) to look up, offline, exactly which calibrated bundle
-        produced it.
+    """The detector's only output. Quantised: no p-value, statistic or residual
+    leaves the detector — just the state and enough provenance (bundle_id) to
+    look up, offline, exactly which calibrated bundle produced it.
     """
 
     t: float

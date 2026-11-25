@@ -1,8 +1,8 @@
 """Every number we chose for GAD, in one place.
 
-These are the values used in the paper. All of them can be changed for
-another plant or another trade-off. `GAD` below turns them into the
-configuration that `commission.py` fits.
+These are the values used in the paper. All of them can be changed for another
+plant or another trade-off. `GAD` below turns them into the configuration that
+`commission.py` fits.
 """
 from __future__ import annotations
 
@@ -80,27 +80,18 @@ GAD = {
     "settle_samples": SETTLING_SECONDS,
     "dwell_anomaly": ALARM_RAISE_SECONDS,
     "dwell_recover": ALARM_CLEAR_SECONDS,
-    # how the layers are built
-    "l1a_cross": True,
-    "l1a_cross_rule": "0083",
-    "use_l1a_long_calibration": True,
-    "cross_channel_warm_calibration": True,
-    "l2_kind": "bounded",
+    # L1a predicts a sensor from the other sensors where such a relation holds
+    # L2 references are fitted on all commissioning rows; a context first seen
+    # after commissioning starts from the sensor's pooled values
     "l2_reference_from_commissioning_rows": True,
-    "unseen_context_pooled_init": True,
-    "l3_per_context_h": True,
-    "l3_per_context_estimator": "evt",
-    "l3_per_context_holdout": 0.2,
-    "l3_per_context_holdout_scope": "mode",
-    "l3_per_context_long_calibration": True,
+    # L3/L4: the CUSUM is capped at 1.1 times its threshold; each operating
+    # context with enough data gets its own threshold (tail fit, checked on the
+    # last 20 % of the calibration data)
     "cusum_cap_factor": 1.1,
-    "full_budget_split": True,
-    "per_sensor_alarms": True,
-    "adaptive_h": True,
-    "unified_l5": True,
+    "l3_per_context_h": True,
+    "l3_per_context_holdout": 0.2,
+    # L5 rule 4: the golden-set test
     "sensitivity_budget": True,
-    "trusted_learning": True,
-    "per_channel_learning": True,
 }
 
 #: the same detector with the four rules of L5 switched off

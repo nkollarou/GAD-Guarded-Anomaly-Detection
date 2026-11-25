@@ -1,6 +1,6 @@
-"""L5, rule 4: after each update, replays the golden set and measures the
-smallest step attack each sensor can still catch. A sensor that became too
-insensitive is pulled back towards its commissioning values.
+"""L5, rule 4: after each update, replays the golden set and measures the smallest
+step attack each sensor can still catch. A sensor that became too insensitive
+is pulled back towards its commissioning values.
 """
 from __future__ import annotations
 
@@ -20,8 +20,8 @@ WINDOW = 600    # and must be caught within this many samples
 @dataclass
 class Branch:
     """One branch's settings for one channel: committed (centre, scale) per
-        context, CUSUM slack k, the channel-wide alarm level h, and the per-context
-        bars that override it where a context has one.
+    context, CUSUM slack k, the channel-wide alarm level h, and the per-context
+    bars that override it where a context has one.
     """
 
     centres: dict
@@ -31,8 +31,8 @@ class Branch:
 
 
 class SensitivityTest:
-    """Stored golden-set errors and the replay that measures a sensor's
-        smallest caught step.
+    """Stored golden-set errors and the replay that measures a sensor's smallest
+    caught step.
     """
 
     def __init__(self, res_a, res_b, regimes, sigma, lam: float, dwell: int,
@@ -60,9 +60,9 @@ class SensitivityTest:
         return m, s  # NaN where the context is uncommitted: that sample abstains
 
     def _levels(self, j: int, b: Branch) -> np.ndarray:
-        """The alarm level in force at every (excerpt, sample) for channel j:
-                the per-context bar wherever that context has a finite one, else the
-                channel-wide `h`.
+        """The alarm level in force at every (excerpt, sample) for channel j: the
+        per-context bar wherever that context has a finite one, else the
+        channel-wide `h`.
         """
         reg = self.regimes[:, :, j]
         h = np.full(reg.shape, float(b.h), dtype=np.float64)
@@ -74,10 +74,10 @@ class SensitivityTest:
         return h
 
     def smallest(self, j: int, sign: float, a: Branch | None, b: Branch | None) -> float | None:
-        """Smallest size in SIZES (sigma) caught in every excerpt, for a step
-                of `sign`; None if none is. The decider fires while either branch's
-                CUSUM evidence is at or above its h, and ANOMALY needs `dwell`
-                consecutive firing samples.
+        """Smallest size in SIZES (sigma) caught in every excerpt, for a step of
+        `sign`; None if none is. The decider fires while either branch's CUSUM
+        evidence is at or above its h, and ANOMALY needs `dwell` consecutive
+        firing samples.
         """
         branches = []
         for res, g, br in ((self.res_a, self.g_a, a), (self.res_b, self.g_b, b)):
@@ -124,10 +124,10 @@ class SensitivityTest:
 
 
 def branch_settings(l2, l3, h_ref: np.ndarray | None, j: int, lam_back: float = 1.0) -> Branch | None:
-    """Channel j's committed settings in one branch; with `lam_back` < 1,
-        pulled toward commissioning: s = s_ref^(1-lam) s^lam, m = m_ref +
-        lam (m - m_ref), h = h_ref^(1-lam) h^lam, with `h_ref` the commissioned
-        alarm levels (the adaptive threshold's reference).
+    """Channel j's committed settings in one branch; with `lam_back` < 1, pulled
+    toward commissioning: s = s_ref^(1-lam) s^lam, m = m_ref + lam (m - m_ref),
+    h = h_ref^(1-lam) h^lam, with `h_ref` the commissioned alarm levels (the
+    adaptive threshold's reference).
     """
     committed = getattr(l2, "_committed", None)
     if committed is None:
@@ -155,9 +155,9 @@ def branch_settings(l2, l3, h_ref: np.ndarray | None, j: int, lam_back: float = 
 
 
 class SensitivityGuard:
-    """Holds each sensor's commissioned smallest caught steps (both signs)
-        and pulls a sensor's settings back whenever an update would take either
-        beyond `cap` times them.
+    """Holds each sensor's commissioned smallest caught steps (both signs) and
+    pulls a sensor's settings back whenever an update would take either beyond
+    `cap` times them.
     """
 
     cap_by_channel: dict[int, float] | None = None

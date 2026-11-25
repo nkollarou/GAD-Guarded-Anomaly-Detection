@@ -9,9 +9,8 @@ DWELL, RECOVER = 1, 1
 
 
 def decide(out_of_control: np.ndarray, dwell: int = 5, recover: int = 30) -> np.ndarray:
-    """ANOMALY after `dwell` consecutive out-of-control samples, NORMAL again
-        after `recover` consecutive in-control ones. GAD and AdaptivePCA use
-        5-in/30-out; RRCF uses 1/1, i.e. a raw threshold on its per-point score.
+    """ANOMALY after `dwell` out-of-control samples in a row, NORMAL again after
+    `recover` in-control ones.
     """
     state = np.zeros(len(out_of_control), dtype=bool)
     on, run = False, 0
@@ -43,8 +42,8 @@ def time_budget_threshold(scores: np.ndarray, *, budget_time_fraction: float,
                           samples_per_day: float = 86_400.0, dwell: int = DWELL,
                           recover: int = RECOVER) -> dict:
     """The calibration record, with `threshold` set. Raises
-        `PerPointCalibrationError` rather than returning the window maximum, which
-        would hold any budget in-sample and none out of sample.
+    `PerPointCalibrationError` rather than returning the window maximum, which
+    would hold any budget in-sample and none out of sample.
     """
     if not 0.0 < budget_time_fraction < 1.0:
         raise ValueError(f"budget_time_fraction must be in (0, 1), got {budget_time_fraction}")
@@ -60,7 +59,7 @@ def time_budget_threshold(scores: np.ndarray, *, budget_time_fraction: float,
         if frac <= budget_time_fraction:
             episodes = int(np.sum(np.diff(np.concatenate(
                 ([0], alarm.astype(np.int8)))) == 1))
-            return {"rule": "time fraction only (docs/decisions/0061 7.4)",
+            return {"rule": "time fraction only",
                     "quantile": float(q), "threshold": h,
                     "budget_time_fraction": float(budget_time_fraction),
                     "time_fraction": frac,

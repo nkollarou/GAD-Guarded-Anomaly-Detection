@@ -1,5 +1,5 @@
-"""L0: input quality. Flags each reading as missing, out of range or stale.
-A flagged reading is still checked for attacks but never learned from.
+"""L0: input quality. Flags each reading as missing, out of range or stale. A
+flagged reading is still checked for attacks but never learned from.
 """
 from __future__ import annotations
 
@@ -17,13 +17,6 @@ TRUSTED_LEARNING_MASK = MISSING | OOR | STALE
 def is_blinding(q: int) -> bool:
     """The channel cannot be scored this sample (no reading)."""
     return bool(q & BLINDING_MASK)
-
-
-def excluded_from_learning(q: int) -> bool:
-    """The reading is scored but must not update any learned notion of
-        normal (L2's scale windows now; L5's quarantine later).
-    """
-    return bool(q & LEARNING_EXCLUSION_MASK)
 
 
 @dataclass(frozen=True)
@@ -45,9 +38,6 @@ class QualityRanges:
         if len(self.channels) != len(self.ranges):
             raise ValueError("channels and ranges must have the same length")
 
-    def as_dict(self) -> dict[str, ChannelRange]:
-        return dict(zip(self.channels, self.ranges))
-
 
 def _stale_run_lengths(values: np.ndarray) -> np.ndarray:
     """Lengths of maximal runs of exactly-equal consecutive values."""
@@ -66,7 +56,7 @@ def fit_quality_ranges(
     step_basis: str = "median",
 ) -> QualityRanges:
     """Fit per-channel OOR/CLIPPED/STALE parameters from a clean, steady-state
-        window. `clean` is (n_samples, n_channels), no NaNs.
+    window. `clean` is (n_samples, n_channels), no NaNs.
     """
     if clean.ndim != 2 or clean.shape[1] != len(names):
         raise ValueError("clean must be (n_samples, n_channels) matching names")
@@ -117,9 +107,9 @@ def fit_quality_ranges(
 
 
 class QualityChecker:
-    """Streaming per-channel quality flagging. Holds its own state (previous
-        value and current run length per channel) — call `update` once per
-        incoming sample, in time order.
+    """Streaming per-channel quality flagging. Holds its own state (previous value
+    and current run length per channel) — call `update` once per incoming
+    sample, in time order.
     """
 
     def __init__(self, ranges: QualityRanges) -> None:
@@ -127,15 +117,6 @@ class QualityChecker:
         n = len(ranges.ranges)
         self._prev = np.full(n, np.nan, dtype=np.float64)
         self._run_len = np.zeros(n, dtype=np.int64)
-
-    def set_ranges(self, ranges: QualityRanges) -> None:
-        """Swap in new ranges (a new bundle) and keep the running state —
-                previous values and stale-run lengths describe the stream, not the
-                ranges, and stay valid across the swap.
-        """
-        if len(ranges.ranges) != len(self._ranges):
-            raise ValueError("new ranges must cover the same channels")
-        self._ranges = ranges.ranges
 
     def update(self, x: np.ndarray) -> np.ndarray:
         if x.shape != (len(self._ranges),):

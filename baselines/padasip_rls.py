@@ -1,5 +1,5 @@
-"""Baseline: a recursive least squares filter (padasip) per sensor, predicting
-it from the other sensors and the commands.
+"""Baseline: a recursive least squares filter (padasip) per sensor, predicting it
+from the other sensors and the commands.
 """
 from __future__ import annotations
 
@@ -35,7 +35,7 @@ class PadasipRLSMonitor:
 
     def stream(self, X: np.ndarray, U: np.ndarray) -> np.ndarray:
         """|a-priori error| per sensor, (n, n_sensors); every filter adapts on
-                every sample after it is scored.
+        every sample after it is scored.
         """
         Z = self._rows(X, U)
         X = np.asarray(X, float)

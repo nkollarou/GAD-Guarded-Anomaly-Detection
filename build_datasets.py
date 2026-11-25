@@ -19,7 +19,7 @@ import openpyxl
 import pandas as pd
 
 from gad.swat import clean_raw_frame, find_commissioning_start, split_channels
-from gad.settings import GAD, SPLIT
+from gad.settings import SPLIT
 
 HOUR = 3600
 #: poisoning from hour 1 to hour 25 of the test stream, stepped at each update
@@ -36,18 +36,15 @@ SEEDS = (52, 53, 54, 55, 56)
 
 NORMAL_PARQUET = Path("data/swat_normal.parquet")
 
-S_REF = {key: GAD[key] for key in (
-    "learn_guard", "l2_band", "l2_clip", "l2_half_life", "l1a_cross", "l1a_cross_rule",
-    "use_l1a_long_calibration", "cross_channel_warm_calibration", "l2_kind",
-    "unseen_context_pooled_init", "cusum_cap_factor", "full_budget_split",
-    "per_sensor_alarms", "adaptive_h", "unified_l5", "sensitivity_budget",
-    "trusted_learning", "per_channel_learning")} | {"l2_cap": 4.0, "adaptive_h_cap": 4.0}
+S_REF = {"learn_guard": 900, "l2_band": 1.0, "l2_clip": 3.0, "l2_half_life": 43200.0,
+         "cusum_cap_factor": 1.1, "sensitivity_budget": True,
+         "l2_cap": 4.0, "adaptive_h_cap": 4.0}
 OUT = Path("data/datasets")
 
 
 def split_rows(n: int) -> tuple[int, int, int]:
     """(fit_end, warm_end, cal_end) as rows of the steady window, the same
-        arithmetic as `gad.commission.commission(split=SPLIT)`.
+    arithmetic as `gad.commission.commission(split=SPLIT)`.
     """
     fit_end = int(n * SPLIT[0])
     n_held = n - fit_end
@@ -57,8 +54,8 @@ def split_rows(n: int) -> tuple[int, int, int]:
 
 
 def load_steady(parquet: Path):
-    """The clean recording from the end of the start-up fill, and its sensed
-        and commanded channels.
+    """The clean recording from the end of the start-up fill, and its sensed and
+    commanded channels.
     """
     df = pd.read_parquet(parquet)
     sensed, commanded = split_channels(list(df.columns))
@@ -67,9 +64,9 @@ def load_steady(parquet: Path):
 
 
 def load_xlsx(path: Path) -> pd.DataFrame:
-    """Read a SWaT xlsx export: row 1 is a process-group header, row 2 is
-        the real header (both are stripped of the leading-whitespace quirk by
-        `clean_raw_frame`, called by the caller on the returned frame).
+    """Read a SWaT xlsx export: row 1 is a process-group header, row 2 is the real
+    header (both are stripped of the leading-whitespace quirk by
+    `clean_raw_frame`, called by the caller on the returned frame).
     """
     wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
     ws = wb[wb.sheetnames[0]]
@@ -125,8 +122,8 @@ def schedule(rng: np.random.Generator, n_sizes: int = 7,
 
 
 def _stepwise(n: int, start: int, stop: int, period: int) -> np.ndarray:
-    """Step count k at each sample: 0 before `start`, then one more per
-        `period` until `stop`, held afterwards (the lie stays in place).
+    """Step count k at each sample: 0 before `start`, then one more per `period`
+    until `stop`, held afterwards (the lie stays in place).
     """
     k = np.zeros(n)
     idx = np.arange(n)
@@ -137,10 +134,10 @@ def _stepwise(n: int, start: int, stop: int, period: int) -> np.ndarray:
 
 
 def campaign_window(start_h: float, duration_h: float) -> tuple[int, int]:
-    """(start row, stop row) of a poisoning campaign, refused if it runs into
-        the payload. The 21 attacks start at `ATTACK_START` and a campaign that
-        overlapped them would poison the detector with the attacks it is being
-        scored on.
+    """(start row, stop row) of a poisoning campaign, refused if it runs into the
+    payload. The 21 attacks start at `ATTACK_START` and a campaign that
+    overlapped them would poison the detector with the attacks it is being
+    scored on.
     """
     start, stop = int(start_h * HOUR), int(start_h * HOUR + duration_h * HOUR)
     if stop > ATTACK_START:
@@ -151,8 +148,8 @@ def campaign_window(start_h: float, duration_h: float) -> tuple[int, int]:
 
 
 def reference_scales(sensed: list[str], parquet: Path) -> dict[str, float]:
-    """Each sensor's s_ref: the median over its operating contexts of the
-        residual standard deviation the commissioned detector starts from.
+    """Each sensor's s_ref: the median over its operating contexts of the residual
+    standard deviation the commissioned detector starts from.
     """
     import gad.commission as gc
     gc.NORMAL_PARQUET = parquet
@@ -168,7 +165,8 @@ def reference_scales(sensed: list[str], parquet: Path) -> dict[str, float]:
 
 def build_seed(seed: int, steady, sensed, commanded, s_ref: dict, out_root: Path,
                source: Path) -> Path:
-    """One attack order: for every target, the clean dataset and one per rate."""
+    """One attack order: for every target, the clean dataset and one per rate.
+    """
     start, stop = campaign_window(1, 24)
     fit_end, _, cal_end = split_rows(len(steady))
     test = steady.iloc[cal_end:].reset_index(drop=True)

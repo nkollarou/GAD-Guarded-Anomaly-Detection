@@ -3,7 +3,6 @@ numpy
 scipy
 pandas
 pyarrow            # Parquet files
-statsmodels>=0.15
 threadpoolctl      # one BLAS thread, for reproducible numbers
 scikit-learn       # AUC-PR in evaluation/metrics.py
 

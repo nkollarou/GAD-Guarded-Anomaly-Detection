@@ -36,7 +36,8 @@ def _existence(r: tuple[int, int], others: list[tuple[int, int]]) -> float:
 
 def _overlap_reward(r: tuple[int, int], others: list[tuple[int, int]],
                     cardinality: str) -> float:
-    """Tatbul et al. 2018 eq. for OverlapReward, with a flat positional bias."""
+    """Tatbul et al. 2018 eq. for OverlapReward, with a flat positional bias.
+    """
     hits = [o for o in others if _overlap(r, o)]
     if not hits:
         return 0.0
@@ -56,9 +57,7 @@ def range_based(alarm: np.ndarray, label: np.ndarray, *,
                 bias: str = RANGE_PARAMS["bias"]) -> dict:
     """Range-based precision / recall / F1 (Tatbul et al., NeurIPS 2018)."""
     if bias != "flat":
-        raise ValueError("only the flat positional bias is implemented "
-                         "(docs/decisions/0062); asking for another is a "
-                         "research decision, not a parameter")
+        raise ValueError("only the flat positional bias is implemented")
     real = _ranges(label)
     pred = _ranges(alarm)
     if real:
@@ -90,8 +89,8 @@ def f1_score(precision: float, recall: float) -> float:
 
 
 def point_wise(alarm: np.ndarray, label: np.ndarray) -> dict:
-    """The classical per-sample confusion matrix. ANOMALY is positive;
-        DEGRADED is not an alarm and is reported as abstention instead.
+    """The classical per-sample confusion matrix. ANOMALY is positive; DEGRADED is
+    not an alarm and is reported as abstention instead.
     """
     alarm = np.asarray(alarm, dtype=bool)
     label = np.asarray(label, dtype=bool)
@@ -112,9 +111,9 @@ def point_wise(alarm: np.ndarray, label: np.ndarray) -> dict:
 
 
 def composite(alarm: np.ndarray, label: np.ndarray, per_attack: list[dict]) -> dict:
-    """Composite F1 (Garg et al., IEEE TNNLS 2021): event-wise recall x
-        point-wise precision. `per_attack` supplies the event side, so there is
-        exactly one definition of "this attack was detected" in the report.
+    """Composite F1 (Garg et al., IEEE TNNLS 2021): event-wise recall x point-wise
+    precision. `per_attack` supplies the event side, so there is exactly one
+    definition of "this attack was detected" in the report.
     """
     n = len(per_attack)
     hit = sum(bool(p["detected"]) for p in per_attack)
@@ -247,46 +246,3 @@ def report(states: np.ndarray, timestamps: pd.Series, gt: GroundTruth,
 
 # --- explainability -------------------------------------------------------
 
-def top_k_attribution(
-    records_by_row: dict[int, tuple[str, ...]],
-    per_attack: list[dict],
-    gt: GroundTruth,
-    sensed: set[str],
-    ks: tuple[int, ...] = (1, 3, 5),
-) -> dict:
-    """Top-k accuracy over the ground truth's attacked channels."""
-    by_number = {a.number: a for a in gt.attacks}
-    excluded = [p["number"] for p in per_attack if not by_number[p["number"]].points]
-    scored = [p for p in per_attack if by_number[p["number"]].points]
-
-    def tags_for(p: dict) -> tuple[str, ...]:
-        return records_by_row.get(p["detect_row"], ()) if p["detected"] else ()
-
-    out: dict = {"excluded_attacks_no_logged_point": excluded, "k": {},
-                 "source": "top-k accuracy against the ground truth's attacked channels"}
-    points = sorted({pt for p in scored for pt in by_number[p["number"]].points})
-    for k in ks:
-        hit_all, hit_det, n_det, hit_sens, n_sens = 0, 0, 0, 0, 0
-        point_hit = {pt: False for pt in points}
-        for p in scored:
-            a = by_number[p["number"]]
-            top = set(tags_for(p)[:k])
-            hit = bool(top & set(a.points))
-            hit_all += hit
-            if p["detected"]:
-                n_det += 1
-                hit_det += hit
-            sensed_points = set(a.points) & sensed
-            if sensed_points:
-                n_sens += 1
-                hit_sens += bool(top & sensed_points)
-            for pt in a.points:
-                point_hit[pt] |= pt in top
-        out["k"][k] = {
-            "all_attacks": {"hits": hit_all, "denominator": len(scored)},
-            "detected": {"hits": hit_det, "denominator": n_det},
-            "sensor_points_only": {"hits": hit_sens, "denominator": n_sens},
-            "per_point": {"hits": sum(point_hit.values()), "denominator": len(points),
-                          "missed": sorted(pt for pt, h in point_hit.items() if not h)},
-        }
-    return out
