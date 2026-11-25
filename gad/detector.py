@@ -1,12 +1,6 @@
-"""The streaming detector: passes each sample through layers L0 to L6 and returns
-NORMAL, ANOMALY or DEGRADED.
-"""
 from __future__ import annotations
-
 from typing import Callable, Iterable
-
 import numpy as np
-
 from gad.l0_quality import TRUSTED_LEARNING_MASK, is_blinding
 from gad.l1a_predictor import RelationalPredictor
 from gad.l1b_physics import StateSpacePredictor
@@ -32,17 +26,17 @@ class Detector:
         l2b: BoundedScaleResidual,
         l3a: Cusum,
         l3b: Cusum,
-        decider: PerSensorDecider,
+        decider: PerSensorDecider, # l4
         regime_fn: Callable[[np.ndarray], int],
         n_possible_tests: int,
         adaptive_a,
         adaptive_b,
         joint_cap: float,
-        evidence: EvidenceBuilder | None = None,
+        evidence: EvidenceBuilder | None = None, # l6
         learn_guard: int = 0,
         sensitivity=None,
         settle_samples: int = 0,
-        naive_learning: bool = False,
+        naive_learning: bool = False, # for unguarded version of gad
     ) -> None:
         """`l3a`/`l3b` must already carry their thresholds. `n_possible_tests` is
         the number of residuals that could be checked on a sample (one per
@@ -66,7 +60,7 @@ class Detector:
         self.adaptive_a, self.adaptive_b = adaptive_a, adaptive_b
         self.joint_cap = joint_cap
         self._settle = SettlingTracker(len(self.sensed_channels), settle_samples)
-        self.naive_learning = bool(naive_learning)
+        self.naive_learning = bool(naive_learning) 
         if self.naive_learning:
             for l2 in (l2a, l2b):
                 if hasattr(l2, "clip"):

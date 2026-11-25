@@ -1,9 +1,6 @@
-"""Shared types: a sample, its quality flags and the detector's states."""
 from __future__ import annotations
-
 from dataclasses import dataclass
 from enum import Enum
-
 import numpy as np
 
 VALID = 0
@@ -22,9 +19,9 @@ class DetectorState(Enum):
 @dataclass(frozen=True)
 class Sample:
     t: float          # unix seconds
-    x: np.ndarray     # sensed   — what an attacker can lie about
-    u: np.ndarray     # commanded — what the controller ordered
-    q: np.ndarray     # uint8 quality bitmask, aligned with x (one entry per sensed channel)
+    x: np.ndarray     # sensor readings
+    u: np.ndarray     # commands
+    q: np.ndarray     # quality tags from l0
 
     def __post_init__(self) -> None:
         if self.x.ndim != 1 or self.u.ndim != 1:
@@ -37,11 +34,7 @@ class Sample:
 
 @dataclass(frozen=True)
 class Decision:
-    """The detector's only output. Quantised: no p-value, statistic or residual
-    leaves the detector — just the state and enough provenance (bundle_id) to
-    look up, offline, exactly which calibrated bundle produced it.
-    """
 
     t: float
     state: DetectorState
-    bundle_id: str
+    bundle_id: str #which version of the detector made the decision
